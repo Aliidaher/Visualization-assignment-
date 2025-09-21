@@ -1,15 +1,27 @@
 import pandas as pd
 import streamlit as st
-import plotly.express as px
 
-# Try to enable trendline if statsmodels is available
+# ---- Safe imports ----
 try:
-    import statsmodels.api as sm  # noqa: F401
+    import plotly.express as px
+    HAS_PLOTLY = True
+except Exception:
+    HAS_PLOTLY = False
+
+try:
+    import statsmodels.api as sm  # only to enable px trendline
     HAS_SM = True
 except Exception:
     HAS_SM = False
 
 st.set_page_config(page_title="Lebanon Tourism Explorer", layout="wide")
+
+if not HAS_PLOTLY:
+    st.error(
+        "Plotly is not installed on this build. "
+        "Add `plotly` to requirements.txt at the repo root and redeploy."
+    )
+    st.stop()
 
 DATA_URL = "https://linked.aub.edu.lb/pkgcube/data/551015b5649368dd2612f795c2a9c2d8_20240902_115953.csv"
 
@@ -55,7 +67,6 @@ sort_metric = st.sidebar.radio(
     options=["Total number of hotels", "Town"],
     index=0
 )
-# Use checkbox for wide compatibility with Streamlit versions
 ascending = st.sidebar.checkbox("Sort ascending", value=False)
 
 # ---------- Apply Filters ----------
@@ -96,7 +107,6 @@ with c1:
         plot_df = filtered.sort_values(by="Total number of hotels", ascending=ascending)
     else:
         plot_df = filtered.sort_values(by="Town", ascending=ascending)
-
     fig_bar = px.bar(
         plot_df,
         x="Town",
@@ -113,8 +123,7 @@ with c2:
     st.subheader("Tourism Index vs. Number of Restaurants")
     trend = "ols" if (show_trendline and HAS_SM) else None
     if show_trendline and not HAS_SM:
-        st.info("Trendline requires 'statsmodels'. Add it to requirements.txt to enable.")
-
+        st.info("Trendline requires `statsmodels`. Add it to requirements.txt to enable.")
     fig_scatter = px.scatter(
         filtered,
         x="Total number of restaurants",
