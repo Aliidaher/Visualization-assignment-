@@ -1,8 +1,27 @@
 import pandas as pd
 import streamlit as st
-import plotly.express as px
+
+# --- Safe imports (show friendly errors on missing deps) ---
+try:
+    import plotly.express as px
+    HAS_PLOTLY = True
+except Exception:
+    HAS_PLOTLY = False
+
+try:
+    import statsmodels.api as sm  # noqa: F401  # only to enable px trendline
+    HAS_SM = True
+except Exception:
+    HAS_SM = False
 
 st.set_page_config(page_title="Lebanon Tourism Explorer", layout="wide")
+
+if not HAS_PLOTLY:
+    st.error(
+        "Plotly is not installed on this build. "
+        "Add `plotly` to requirements.txt and redeploy."
+    )
+    st.stop()
 
 DATA_URL = "https://linked.aub.edu.lb/pkgcube/data/551015b5649368dd2612f795c2a9c2d8_20240902_115953.csv"
 
@@ -31,6 +50,7 @@ df = load_data(DATA_URL)
 
 # ---------- Sidebar Controls ----------
 st.sidebar.header("Filters")
+
 towns = sorted(df["Town"].unique().tolist())
 default_towns = towns  # preselect all
 
@@ -42,19 +62,30 @@ min_restaurants = st.sidebar.slider(
     int(df["Total number of restaurants"].min()),
     step=1
 )
+
+# Trendline only works if statsmodels is available
 show_trendline = st.sidebar.checkbox("Show trendline on scatter (OLS)", value=True)
+if show_trendline and not HAS_SM:
+    st.info("Trendline requires `statsmodels`. Add it to requirements.txt to enable.")
 sort_metric = st.sidebar.radio(
     "Sort bar chart by",
     options=["Total number of hotels", "Town"],
     index=0
 )
-ascending = st.sidebar.toggle("Sort ascending", value=False)
+# Use checkbox for maximum compatibility
+ascending = st.sidebar.checkbox("Sort ascending", value=False)
 
 # ---------- Apply Filters ----------
 filtered = df.copy()
 if selected_towns:
     filtered = filtered[filtered["Town"].isin(selected_towns)]
 filtered = filtered[filtered["Total number of restaurants"] >= min_restaurants]
+
+# Guard: no data after filters
+if filtered.empty:
+    st.title("Lebanon Tourism Explorer")
+    st.warning("No data matches your filters. Adjust filters to see results.")
+    st.stop()
 
 # ---------- Header & Description ----------
 st.title("Lebanon Tourism Explorer")
@@ -96,7 +127,7 @@ with c1:
 # Scatter plot
 with c2:
     st.subheader("Tourism Index vs. Number of Restaurants")
-    trend = "ols" if show_trendline else None
+    trend = "ols" if (show_trendline and HAS_SM) else None
     fig_scatter = px.scatter(
         filtered,
         x="Total number of restaurants",
